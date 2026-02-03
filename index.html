@@ -1,625 +1,322 @@
 <!-- index.html -->
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Titanic EDA Dashboard (Browser-only)</title>
+  <title>Titanic HW2 — Shallow NN Factor Discovery (TFJS, Browser-only)</title>
 
-  <!-- Libraries (CDN) -->
+  <!-- TFJS + TFJS-VIS (required by assignment) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis@latest"></script>
+
+  <!-- CSV parsing helper (browser-only) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 
   <style>
     :root{
-      --bg:#0b1020;
-      --card:#0f1733;
-      --muted:#9fb0ffcc;
-      --text:#e8ecff;
-      --accent:#7aa2ff;
-      --accent2:#7dffb2;
-      --border:rgba(255,255,255,.10);
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --bg:#0b1020; --card:#0f1733; --muted:#aab6ffcc; --text:#e9edff;
+      --accent:#7aa2ff; --border:rgba(255,255,255,.12); --shadow:0 10px 30px rgba(0,0,0,.35);
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", "Apple Color Emoji","Segoe UI Emoji";
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue";
     }
     *{ box-sizing:border-box; }
     body{
-      margin:0;
-      font-family: var(--sans);
-      color: var(--text);
-      background: radial-gradient(1200px 700px at 20% -10%, rgba(122,162,255,.25), transparent 55%),
-                  radial-gradient(900px 600px at 95% 10%, rgba(125,255,178,.18), transparent 55%),
+      margin:0; font-family:var(--sans); color:var(--text);
+      background: radial-gradient(1000px 650px at 20% -10%, rgba(122,162,255,.25), transparent 55%),
+                  radial-gradient(900px 600px at 95% 10%, rgba(125,255,178,.15), transparent 55%),
                   var(--bg);
     }
-    a{ color:var(--accent); text-decoration:none; }
-    a:hover{ text-decoration:underline; }
-
     header{
-      position: sticky;
-      top: 0;
-      z-index: 20;
+      position: sticky; top:0; z-index:10;
       backdrop-filter: blur(10px);
-      background: rgba(11,16,32,.72);
+      background: rgba(11,16,32,.75);
       border-bottom: 1px solid var(--border);
     }
-    .wrap{ max-width: 1200px; margin: 0 auto; padding: 16px; }
-    .title{
-      display:flex; align-items:center; justify-content:space-between; gap: 14px;
-    }
-    h1{
-      font-size: 18px;
-      margin: 0;
-      letter-spacing: .2px;
-      line-height: 1.2;
-    }
+    .wrap{ max-width: 1200px; margin:0 auto; padding:16px; }
+    .titleRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    h1{ margin:0; font-size:18px; line-height:1.2; letter-spacing:.2px; }
+    .sub{ margin-top:4px; color:var(--muted); font-size:12px; }
     .pill{
-      font-size: 12px;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,.03);
-      white-space: nowrap;
+      font-family:var(--mono); font-size:12px; color:var(--muted);
+      border: 1px solid var(--border); background: rgba(255,255,255,.03);
+      padding:6px 10px; border-radius:999px; white-space:nowrap;
     }
     .grid{
-      display:grid;
-      grid-template-columns: 360px 1fr;
-      gap: 14px;
-      align-items:start;
+      display:grid; grid-template-columns: 360px 1fr; gap:14px; align-items:start;
       padding: 14px 16px 22px;
     }
-    @media (max-width: 980px){
-      .grid{ grid-template-columns: 1fr; }
-    }
+    @media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
     .card{
-      background: rgba(15,23,51,.75);
+      background: rgba(15,23,51,.78);
       border: 1px solid var(--border);
       border-radius: 16px;
       box-shadow: var(--shadow);
       overflow:hidden;
     }
-    .card .hd{
+    .hd{
       padding: 12px 14px;
       border-bottom: 1px solid var(--border);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap: 10px;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
     }
-    .card .hd h2{
-      margin:0;
-      font-size: 13px;
-      letter-spacing: .2px;
-      color: #eaf0ff;
-    }
-    .card .bd{ padding: 12px 14px; }
-    .muted{ color: var(--muted); }
-    .small{ font-size: 12px; }
-    .mono{ font-family: var(--mono); }
-
-    .row{ display:flex; gap: 10px; flex-wrap:wrap; align-items:center; }
-    .row > *{ flex: 1 1 auto; }
-
-    label{ font-size: 12px; color: var(--muted); display:block; margin-bottom:6px; }
-    input[type="file"], select, button, input[type="text"]{
+    .hd h2{ margin:0; font-size:13px; letter-spacing:.2px; color:#eef2ff; }
+    .bd{ padding: 12px 14px; }
+    label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    input[type="file"], select, button, input[type="range"], input[type="number"]{
       width:100%;
-      color: var(--text);
+      color:var(--text);
       background: rgba(255,255,255,.04);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 10px;
-      outline: none;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px 10px;
+      outline:none;
     }
-    input[type="text"]{ font-family: var(--mono); font-size: 12px; }
-    select{ cursor:pointer; }
-    button{
-      cursor:pointer;
-      font-weight: 600;
+    button{ cursor:pointer; font-weight:700; border: 1px solid rgba(122,162,255,.45);
       background: linear-gradient(135deg, rgba(122,162,255,.35), rgba(125,255,178,.18));
-      border: 1px solid rgba(122,162,255,.45);
-      transition: transform .05s ease, filter .15s ease;
+      transition: filter .15s ease, transform .05s ease;
     }
-    button:hover{ filter: brightness(1.06); }
+    button:hover{ filter:brightness(1.06); }
     button:active{ transform: translateY(1px); }
-    button.secondary{
-      background: rgba(255,255,255,.04);
-      border: 1px solid var(--border);
-      font-weight: 600;
-    }
-
-    .tabs{
-      display:flex; gap:8px; flex-wrap:wrap;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255,255,255,.02);
-    }
-    .tab{
-      border: 1px solid var(--border);
-      padding: 7px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      color: var(--muted);
-      cursor:pointer;
-      user-select:none;
-      background: rgba(255,255,255,.02);
-    }
-    .tab.active{
-      color: #091025;
-      background: linear-gradient(135deg, rgba(122,162,255,.95), rgba(125,255,178,.85));
-      border-color: transparent;
-    }
-
-    .kpi{
-      display:grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .kpi .box{
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: rgba(255,255,255,.03);
-    }
-    .kpi .num{ font-size: 18px; font-weight: 800; letter-spacing: .2px; }
-    .kpi .lbl{ font-size: 12px; color: var(--muted); margin-top: 2px; }
-
+    button.secondary{ background: rgba(255,255,255,.04); border:1px solid var(--border); }
+    button:disabled{ opacity:.5; cursor:not-allowed; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .row > *{ flex: 1 1 auto; }
     .note{
       border-left: 3px solid rgba(122,162,255,.8);
       background: rgba(122,162,255,.10);
       padding: 10px 12px;
       border-radius: 12px;
-      margin-top: 10px;
+      color: rgba(232,236,255,.92);
+      font-size:12px;
+      line-height:1.5;
+    }
+    .warn{
+      border-left-color: rgba(255,170,90,.85);
+      background: rgba(255,170,90,.10);
     }
     .danger{
-      border-left-color: rgba(255,140,140,.85);
-      background: rgba(255,140,140,.10);
+      border-left-color: rgba(255,120,120,.85);
+      background: rgba(255,120,120,.10);
     }
-
-    .plot{
-      width:100%;
-      min-height: 360px;
-    }
-    .plot.sm{ min-height: 280px; }
-
-    .tableWrap{
-      overflow:auto;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: rgba(255,255,255,.02);
-    }
-    table{
-      width:100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    th, td{
-      padding: 10px 10px;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      text-align:left;
-      white-space: nowrap;
-    }
-    th{ color:#eaf0ff; font-weight:700; background: rgba(255,255,255,.02); position: sticky; top: 0; }
-    td{ color: rgba(232,236,255,.92); }
-    tr:hover td{ background: rgba(255,255,255,.02); }
-    .tag{
-      display:inline-block;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      background: rgba(255,255,255,.02);
-    }
-    .ok{ border-color: rgba(125,255,178,.35); color: rgba(125,255,178,.95); background: rgba(125,255,178,.07); }
-    .warn{ border-color: rgba(255,210,125,.35); color: rgba(255,210,125,.95); background: rgba(255,210,125,.07); }
-    .helpRow{
-      display:grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    @media (max-width: 980px){
-      .helpRow{ grid-template-columns: 1fr; }
-    }
-    .foot{
-      padding: 0 16px 18px;
-      color: var(--muted);
-      font-size: 12px;
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    .hidden{ display:none !important; }
+    .mono{ font-family: var(--mono); }
+    .muted{ color: var(--muted); }
+    .kpiGrid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
+    .kpi{ padding:10px 12px; border:1px solid var(--border); border-radius:14px; background: rgba(255,255,255,.03); }
+    .kpi .num{ font-size:18px; font-weight:900; letter-spacing:.2px; }
+    .kpi .lbl{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .hr{ height:1px; background: rgba(255,255,255,.10); margin:12px 0; }
+    .twoCol{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width: 980px){ .twoCol{ grid-template-columns: 1fr; } }
+    .small{ font-size:12px; }
+    .inline{ display:flex; gap:10px; align-items:center; }
+    .inline > .grow{ flex: 1 1 auto; }
+    footer{ max-width:1200px; margin:0 auto; padding: 0 16px 18px; color:var(--muted); font-size:12px; }
+    code{ font-family: var(--mono); font-size: 12px; }
   </style>
 </head>
 
 <body>
 <header>
-  <div class="wrap title">
+  <div class="wrap titleRow">
     <div>
-      <h1>🚢 Titanic EDA Dashboard (GitHub Pages • browser-only)</h1>
-      <div class="muted small">Интерактивный EDA + feature importance на основе train.csv (Survived) с объединением train+test (source)</div>
+      <h1>🚢 Titanic HW2 — Shallow Neural Network Factor Discovery (TFJS, Browser-only)</h1>
+      <div class="sub">Train a single-hidden-layer NN in the browser, explore important factors (EDA + metrics), export predictions and model.</div>
     </div>
-    <div class="pill mono" id="statusPill">status: idle</div>
+    <div class="pill" id="statusPill">status: idle</div>
   </div>
 </header>
 
 <div class="grid wrap">
   <!-- LEFT: Controls -->
   <aside class="card">
-    <div class="hd">
-      <h2>Данные</h2>
-      <span class="tag" id="dataTag">not loaded</span>
-    </div>
+    <div class="hd"><h2>Controls</h2><span class="pill" id="dataPill">data: not loaded</span></div>
     <div class="bd">
-      <div class="note small">
-        <div><b>Вариант A (GitHub Pages):</b> положи <span class="mono">train.csv</span> и <span class="mono">test.csv</span> рядом с <span class="mono">index.html</span> — приложение само их подтянет.</div>
-        <div style="margin-top:6px;"><b>Вариант B (локально/по файлам):</b> выбери файлы вручную ниже.</div>
+      <div class="note">
+        <b>How to run (GitHub Pages):</b><br/>
+        1) Put <code>index.html</code>, <code>app.js</code>, <code>train.csv</code>, <code>test.csv</code> in the repo root.<br/>
+        2) Repo → Settings → Pages → Deploy from branch → <code>main</code> / <code>root</code>.<br/>
+        3) Open your Pages URL. Click <b>Fetch from repo</b> or upload CSVs.
       </div>
 
       <div style="margin-top:12px;">
-        <label>train.csv (с Survived)</label>
+        <label>train.csv (with Survived)</label>
         <input id="trainFile" type="file" accept=".csv" />
       </div>
-
       <div style="margin-top:10px;">
-        <label>test.csv (без Survived)</label>
+        <label>test.csv (without Survived)</label>
         <input id="testFile" type="file" accept=".csv" />
       </div>
 
       <div class="row" style="margin-top:10px;">
-        <button id="btnLoad">Загрузить / Reload</button>
-        <button id="btnUseSample" class="secondary" title="Попробовать загрузить ./train.csv и ./test.csv из репозитория">Fetch из репо</button>
+        <button id="btnFetch">Fetch from repo (./train.csv & ./test.csv)</button>
+        <button id="btnLoad" class="secondary">Load from file inputs</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="note small warn">
+        <b>Schema (easy to reuse):</b><br/>
+        Target: <code>Survived</code> (0/1).<br/>
+        Features: <code>Pclass, Sex, Age, SibSp, Parch, Fare, Embarked</code> (+ optional engineered).<br/>
+        ID: <code>PassengerId</code> (excluded from training, used for export).
       </div>
 
       <div style="margin-top:12px;">
-        <label>Источник строк</label>
-        <select id="sourceFilter">
-          <option value="all">train + test (merged)</option>
-          <option value="train">train only</option>
-          <option value="test">test only</option>
-        </select>
-      </div>
-
-      <div style="margin-top:10px;">
-        <label>Показывать пропуски как категорию (для EDA)</label>
-        <select id="missingAsCategory">
-          <option value="yes">Да (Missing)</option>
-          <option value="no">Нет (drop Missing)</option>
-        </select>
-      </div>
-
-      <div style="margin-top:10px;">
-        <label>Редкие категории объединять в "Other" (порог по доле)</label>
-        <select id="rareThreshold">
-          <option value="0.00">0% (выкл)</option>
-          <option value="0.01">1%</option>
-          <option value="0.02" selected>2%</option>
-          <option value="0.05">5%</option>
-        </select>
-      </div>
-
-      <div style="margin-top:12px;">
-        <div class="kpi">
-          <div class="box">
-            <div class="num" id="kpiRows">—</div>
-            <div class="lbl">строк (после merge)</div>
-          </div>
-          <div class="box">
-            <div class="num" id="kpiCols">—</div>
-            <div class="lbl">признаков</div>
-          </div>
-          <div class="box">
-            <div class="num" id="kpiTrain">—</div>
-            <div class="lbl">train строк</div>
-          </div>
-          <div class="box">
-            <div class="num" id="kpiSurv">—</div>
-            <div class="lbl">survival rate (train)</div>
-          </div>
+        <label>Optional engineered features</label>
+        <div class="twoCol">
+          <label class="inline"><input id="optFamilySize" type="checkbox" /> <span class="grow">FamilySize = SibSp + Parch + 1</span></label>
+          <label class="inline"><input id="optIsAlone" type="checkbox" /> <span class="grow">IsAlone = (FamilySize == 1)</span></label>
         </div>
       </div>
 
-      <div class="note small danger" id="warnBox" style="display:none; margin-top:12px;"></div>
+      <div style="margin-top:12px;">
+        <label>Training epochs (max)</label>
+        <input id="epochs" type="number" min="5" max="200" value="50" />
+      </div>
+      <div style="margin-top:10px;">
+        <label>Batch size</label>
+        <input id="batchSize" type="number" min="8" max="512" value="32" />
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="row">
+        <button id="btnPreprocess" disabled>Preprocess</button>
+        <button id="btnBuildModel" class="secondary" disabled>Build model</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button id="btnTrain" disabled>Train</button>
+        <button id="btnEvaluate" class="secondary" disabled>Evaluate</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <div>
+        <label>ROC / Threshold (0–1)</label>
+        <input id="thrSlider" type="range" min="0" max="1" step="0.01" value="0.50" disabled />
+        <div class="inline small" style="margin-top:6px;">
+          <div class="pill mono" id="thrValue">threshold: 0.50</div>
+          <div class="muted">Updates Confusion Matrix / Precision / Recall / F1</div>
+        </div>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="row">
+        <button id="btnPredict" disabled>Predict test.csv & Download CSVs</button>
+        <button id="btnExportModel" class="secondary" disabled>Export model</button>
+      </div>
+
+      <div style="margin-top:12px;" class="note small danger" id="errBox" style="display:none;"></div>
 
       <div style="margin-top:12px;">
-        <button id="btnDownloadProcessed" class="secondary" disabled>Скачать processed.csv</button>
+        <div class="kpiGrid">
+          <div class="kpi"><div class="num" id="kpiRows">—</div><div class="lbl">rows (train)</div></div>
+          <div class="kpi"><div class="num" id="kpiPosRate">—</div><div class="lbl">survival rate (train)</div></div>
+          <div class="kpi"><div class="num" id="kpiFeat">—</div><div class="lbl">feature dim</div></div>
+          <div class="kpi"><div class="num" id="kpiAuc">—</div><div class="lbl">AUC (val)</div></div>
+        </div>
       </div>
     </div>
   </aside>
 
-  <!-- RIGHT: Main -->
+  <!-- RIGHT: Main content -->
   <main class="card">
-    <div class="tabs" id="tabs">
-      <div class="tab active" data-tab="overview">Overview</div>
-      <div class="tab" data-tab="preproc">Preprocessing</div>
-      <div class="tab" data-tab="missing">Missingness</div>
-      <div class="tab" data-tab="univariate">Univariate</div>
-      <div class="tab" data-tab="multivariate">Multivariate</div>
-      <div class="tab" data-tab="importance">Feature importance</div>
-      <div class="tab" data-tab="conclusion">Conclusion</div>
+    <div class="hd"><h2>Dashboard</h2><span class="muted small">All computation runs locally in your browser.</span></div>
+    <div class="bd">
+      <section>
+        <h3 style="margin:0 0 8px 0; font-size:14px;">1) Data Load & Inspection</h3>
+        <div class="twoCol">
+          <div>
+            <div class="note small">
+              After loading, you will see:
+              a preview table, dataset shape, missing %, and quick EDA bars (Survival by Sex/Pclass).
+            </div>
+          </div>
+          <div>
+            <div class="note small">
+              Tip: If you deploy on GitHub Pages, <b>Fetch from repo</b> is simplest.
+              Locally, use file inputs.
+            </div>
+          </div>
+        </div>
+        <div id="visPreview"></div>
+        <div class="twoCol" style="margin-top:10px;">
+          <div id="visMissing"></div>
+          <div id="visBars"></div>
+        </div>
+      </section>
+
+      <div class="hr"></div>
+
+      <section>
+        <h3 style="margin:0 0 8px 0; font-size:14px;">2) Preprocessing</h3>
+        <div class="note small">
+          Impute: Age=median, Embarked=mode. Standardize Age/Fare.
+          One-hot: Sex/Pclass/Embarked. Optional engineered: FamilySize/IsAlone.
+          This section prints final feature list and tensor shapes.
+        </div>
+        <div id="preprocOut" class="note small" style="margin-top:10px;"></div>
+      </section>
+
+      <div class="hr"></div>
+
+      <section>
+        <h3 style="margin:0 0 8px 0; font-size:14px;">3) Model</h3>
+        <div class="note small">
+          Shallow binary classifier: Dense(16, relu) → Dense(1, sigmoid).
+          Optimizer: Adam. Loss: binaryCrossentropy. Metric: accuracy.
+        </div>
+        <div id="modelOut" class="note small" style="margin-top:10px;"></div>
+      </section>
+
+      <div class="hr"></div>
+
+      <section>
+        <h3 style="margin:0 0 8px 0; font-size:14px;">4) Training (live)</h3>
+        <div class="note small">
+          80/20 <b>stratified split</b> by Survived. Early stopping on val_loss (patience=5).
+          Live loss/accuracy plots appear below.
+        </div>
+        <div id="visFit" style="margin-top:10px;"></div>
+      </section>
+
+      <div class="hr"></div>
+
+      <section>
+        <h3 style="margin:0 0 8px 0; font-size:14px;">5) Metrics</h3>
+        <div class="note small">
+          We compute ROC curve + AUC on validation probabilities. Threshold slider updates:
+          confusion matrix + Precision/Recall/F1.
+        </div>
+        <div class="twoCol" style="margin-top:10px;">
+          <div id="visRoc"></div>
+          <div>
+            <div id="visConf"></div>
+            <div id="metricsOut" class="note small" style="margin-top:10px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="hr"></div>
+
+      <section>
+        <h3 style="margin:0 0 8px 0; font-size:14px;">6) Prediction & Export</h3>
+        <div class="note small">
+          Predict probabilities for test.csv. Download:
+          <code>submission.csv</code> (PassengerId, Survived) using current threshold, and
+          <code>probabilities.csv</code> (PassengerId, probability).
+          Export model via <code>downloads://titanic-tfjs</code>.
+        </div>
+      </section>
     </div>
-
-    <!-- OVERVIEW -->
-    <section class="bd" id="tab-overview">
-      <div class="helpRow">
-        <div class="note small">
-          <b>Что это:</b> интерактивный EDA-дашборд по Titanic (Kaggle).<br/>
-          <b>Как преподаватель хочет:</b> “свой промт → EDA → обоснование самой важной фичи”.<br/>
-          Здесь это сделано через: (1) визуальные сравнения (Survived vs feature), (2) ранжирование признаков по связи с Survived (train), (3) финальный текст-обоснование.
-        </div>
-        <div class="note small">
-          <b>Быстрый план:</b><br/>
-          1) Load → 2) Missingness → 3) Univariate (Sex, Pclass, Age, Fare, Title, Deck, FamilySize) → 4) Feature importance → 5) Conclusion.
-        </div>
-      </div>
-
-      <div style="margin-top:12px;" class="tableWrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Step</th>
-              <th>Что смотрим</th>
-              <th>Почему это важно</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><span class="tag ok">1</span> Merge</td>
-              <td>train+test + <span class="mono">source</span></td>
-              <td>единая схема признаков, сравнение распределений</td>
-            </tr>
-            <tr>
-              <td><span class="tag ok">2</span> Preprocessing</td>
-              <td>типы, пропуски, фичи</td>
-              <td>корректные графики и честные сравнения</td>
-            </tr>
-            <tr>
-              <td><span class="tag ok">3</span> EDA</td>
-              <td>Survival rate по категориям + распределения</td>
-              <td>визуальные закономерности “кто выжил”</td>
-            </tr>
-            <tr>
-              <td><span class="tag ok">4</span> Importance</td>
-              <td>Cramér’s V / point-biserial corr</td>
-              <td>численное ранжирование влияния</td>
-            </tr>
-            <tr>
-              <td><span class="tag ok">5</span> Conclusion</td>
-              <td>топ-признак + объяснение</td>
-              <td>готовая аргументация для домашки</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div style="margin-top:14px;" class="row">
-        <div style="flex: 2 1 500px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Распределение источников (train/test)</h2></div>
-            <div class="bd"><div id="plotSource" class="plot sm"></div></div>
-          </div>
-        </div>
-        <div style="flex: 3 1 520px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Survival rate по ключевым категориям (train)</h2></div>
-            <div class="bd"><div id="plotKeyRates" class="plot sm"></div></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PREPROCESSING -->
-    <section class="bd hidden" id="tab-preproc">
-      <div class="note small">
-        <b>Pipeline (в коде):</b>
-        <ol style="margin:8px 0 0 18px; padding:0;">
-          <li>Merge train/test + <span class="mono">source</span>; в test → <span class="mono">Survived = null</span>.</li>
-          <li>Приведение типов (числа/категории).</li>
-          <li>Инженерия признаков (для EDA и importance): <span class="mono">FamilySize</span>, <span class="mono">IsAlone</span>, <span class="mono">Title</span>, <span class="mono">Deck</span>, <span class="mono">TicketGroupSize</span>, <span class="mono">FarePerPerson</span>.</li>
-          <li>Импутация: Age (median по Sex×Pclass), Fare (median по Pclass), Embarked (mode).</li>
-        </ol>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
-        <div style="flex: 1 1 500px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Сколько значений было заполнено (импутация)</h2></div>
-            <div class="bd"><div id="plotImpute" class="plot sm"></div></div>
-          </div>
-        </div>
-        <div style="flex: 1 1 500px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Список признаков</h2></div>
-            <div class="bd">
-              <div id="featureList" class="small muted"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- MISSINGNESS -->
-    <section class="bd hidden" id="tab-missing">
-      <div class="row">
-        <div style="flex: 1 1 520px;">
-          <div class="note small">
-            <b>Missingness:</b> доля пропусков по признакам (после merge).<br/>
-            Подсказка: в Titanic обычно сильно “дыры” в <span class="mono">Cabin</span>, также бывают в <span class="mono">Age</span>, <span class="mono">Embarked</span>, <span class="mono">Fare</span>.
-          </div>
-        </div>
-        <div style="flex: 1 1 280px;">
-          <label>Фильтр по источнику (для missingness)</label>
-          <select id="missingSourceView">
-            <option value="all" selected>train + test</option>
-            <option value="train">train</option>
-            <option value="test">test</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;">
-        <div class="card" style="border-radius:16px;">
-          <div class="hd"><h2>Пропуски по колонкам</h2></div>
-          <div class="bd"><div id="plotMissing" class="plot"></div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- UNIVARIATE -->
-    <section class="bd hidden" id="tab-univariate">
-      <div class="row">
-        <div style="flex: 1 1 280px;">
-          <label>Признак (feature)</label>
-          <select id="uniFeature"></select>
-        </div>
-        <div style="flex: 1 1 220px;">
-          <label>Вид</label>
-          <select id="uniMode">
-            <option value="auto" selected>Auto</option>
-            <option value="distribution">Distribution</option>
-            <option value="survival_rate">Survival rate</option>
-          </select>
-        </div>
-        <div style="flex: 1 1 280px;">
-          <label>Train-only (требуется Survived)</label>
-          <select id="uniTrainOnly">
-            <option value="yes" selected>Да</option>
-            <option value="no">Нет (без Survived)</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;" class="row">
-        <div style="flex: 3 1 700px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2 id="uniTitle">Univariate plot</h2></div>
-            <div class="bd"><div id="plotUni" class="plot"></div></div>
-          </div>
-        </div>
-        <div style="flex: 2 1 420px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Быстрые выводы</h2></div>
-            <div class="bd small" id="uniInsights"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- MULTIVARIATE -->
-    <section class="bd hidden" id="tab-multivariate">
-      <div class="row">
-        <div style="flex: 1 1 280px;">
-          <label>X</label>
-          <select id="mvX"></select>
-        </div>
-        <div style="flex: 1 1 280px;">
-          <label>Y</label>
-          <select id="mvY"></select>
-        </div>
-        <div style="flex: 1 1 280px;">
-          <label>Train-only (требуется Survived для окраски)</label>
-          <select id="mvTrainOnly">
-            <option value="yes" selected>Да</option>
-            <option value="no">Нет</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;">
-        <div class="card" style="border-radius:16px;">
-          <div class="hd"><h2 id="mvTitle">Multivariate plot</h2></div>
-          <div class="bd"><div id="plotMV" class="plot"></div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- IMPORTANCE -->
-    <section class="bd hidden" id="tab-importance">
-      <div class="row">
-        <div style="flex: 1 1 520px;">
-          <div class="note small">
-            <b>Как считаем importance (train):</b><br/>
-            • Для числовых: <span class="mono">|point-biserial corr(feature, Survived)|</span><br/>
-            • Для категориальных: <span class="mono">Cramér’s V(feature, Survived)</span> (после объединения редких категорий).<br/>
-            Это “EDA-importance”: не модельная importance, а сила связи с целевой.
-          </div>
-        </div>
-        <div style="flex: 1 1 280px;">
-          <label>Сколько top признаков показывать</label>
-          <select id="impTopK">
-            <option value="8">Top 8</option>
-            <option value="12" selected>Top 12</option>
-            <option value="16">Top 16</option>
-            <option value="24">Top 24</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-top:12px;" class="row">
-        <div style="flex: 3 1 700px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Ranking (train)</h2></div>
-            <div class="bd"><div id="plotImp" class="plot"></div></div>
-          </div>
-        </div>
-        <div style="flex: 2 1 420px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Таблица</h2></div>
-            <div class="bd">
-              <div class="tableWrap" style="max-height:420px;">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Feature</th>
-                      <th>Type</th>
-                      <th>Score</th>
-                      <th>Metric</th>
-                    </tr>
-                  </thead>
-                  <tbody id="impTableBody"></tbody>
-                </table>
-              </div>
-              <div class="small muted" style="margin-top:10px;" id="impNote"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- CONCLUSION -->
-    <section class="bd hidden" id="tab-conclusion">
-      <div class="note small">
-        Ниже — автоматически сформированная “защита” (обоснование), которое можно вставить в домашку: какой признак самый важный и почему (с опорой на графики/числа).
-      </div>
-
-      <div class="card" style="border-radius:16px; margin-top:12px;">
-        <div class="hd"><h2>Мой вывод по EDA</h2></div>
-        <div class="bd" id="finalConclusion"></div>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
-        <div style="flex: 1 1 520px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Визуальное подтверждение (Top feature)</h2></div>
-            <div class="bd"><div id="plotTopProof" class="plot sm"></div></div>
-          </div>
-        </div>
-        <div style="flex: 1 1 520px;">
-          <div class="card" style="border-radius:16px;">
-            <div class="hd"><h2>Памятка “что сказать”</h2></div>
-            <div class="bd small" id="talkTrack"></div>
-          </div>
-        </div>
-      </div>
-    </section>
   </main>
 </div>
 
-<div class="foot">
-  <div>Под GitHub Pages: добавь <span class="mono">index.html</span>, <span class="mono">app.js</span>, <span class="mono">train.csv</span>, <span class="mono">test.csv</span> в корень репозитория и включи Pages (branch → root).</div>
-  <div style="margin-top:4px;">⚠️ Этот дашборд — EDA: показывает связи и метрики на train. Это не финальная ML-модель.</div>
-</div>
+<footer>
+  <div><b>Deployment notes:</b> Create a public GitHub repo, commit <code>index.html</code>/<code>app.js</code>/<code>train.csv</code>/<code>test.csv</code> to root, enable Pages (main/root), open your Pages URL.</div>
+  <div style="margin-top:4px;">If Pages shows deployment timeouts, add an empty <code>.nojekyll</code> file in repo root and re-save Pages settings.</div>
+</footer>
 
 <script src="./app.js"></script>
 </body>
